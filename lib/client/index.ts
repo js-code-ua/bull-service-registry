@@ -4,7 +4,7 @@ import * as io from 'socket.io-client';
 
 import { redisOptions } from '../types/redisOptions.interface';
 import { queueName, registerEvent } from '../types/constants';
-import { RegistryEvent, EventData } from '../types/registryEvent';
+import { RegistryEvent, RegisterEventData } from '../types/registryEvent';
 import { queueAction } from '../types/queueAction.enum';
 
 class RegistryClient {
@@ -44,15 +44,18 @@ class RegistryClient {
         return io(registryUrl, {
             query: {
                 instanceId: this.instanceId,
+                name: this.name,
             }
         });
     }
 
     async register(): Promise<any> {
-        const Job = await this.registryQueue.add(new RegistryEvent(
-            queueAction.Register,
-            new EventData(this.name, this.instanceId, this.url)
-        ));
+        const Job = await this.registryQueue.add(
+            new RegistryEvent<RegisterEventData>(
+                queueAction.Register,
+                new RegisterEventData(this.name, this.instanceId, this.url)
+            )
+        );
 
         return new Promise((resolve, reject) => {
             this.client.on(registerEvent(this.instanceId), resolve);

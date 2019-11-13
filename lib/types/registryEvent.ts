@@ -1,6 +1,6 @@
 import { queueAction } from './queueAction.enum';
 
-export class EventData {
+export class RegisterEventData {
     name: string;
     id: string;
     url: string;
@@ -12,11 +12,21 @@ export class EventData {
     }
 }
 
-export class RegistryEvent {
-    type: queueAction;
-    payload: EventData;
+export class DeregisterEventData {
+    instanceId: string;
+    name: string;
 
-    constructor (type: queueAction, payload: EventData) {
+    constructor(instanceId: string, name: string) {
+        this.instanceId = instanceId;
+        this.name = name;
+    }
+}
+
+export class RegistryEvent<T>{
+    type: queueAction;
+    payload: any;
+
+    constructor (type: queueAction, payload: T) {
         this.type = type;
         this.payload = payload;
     }
