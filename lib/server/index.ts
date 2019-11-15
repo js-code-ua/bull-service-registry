@@ -42,9 +42,19 @@ class RegistryService {
         return new bullQueue(queueName);
     }
 
+    public async getRecordSet() {
+        const registryRow = JSON.parse((await this.redis.getAsync(registryKey)));
+
+        return registryRow;
+    }
+
+    private async setRecordSet(registryObject: object) {
+        return (await this.redis.setAsync(registryKey, JSON.stringify(registryObject)));
+    }
+
     private async register(data: RegistryEvent<RegisterEventData>): Promise<any> {
         try {
-            const registryRow = JSON.parse((await this.redis.getAsync(registryKey)));
+            const registryRow = await this.getRecordSet();
             const { name, id, url } = data.payload;
 
             if (registryRow) {
@@ -52,7 +62,7 @@ class RegistryService {
                     registryRow[name].instances.push(new ServiceInstance(id, new Date()));
                     registryRow[name].url = url;
 
-                    await this.redis.setAsync(registryKey, JSON.stringify(registryRow));
+                    await this.setRecordSet(registryRow);
                 }
                 else {
                     registryRow[name] = new RegistryRecord(
@@ -61,17 +71,17 @@ class RegistryService {
                         [new ServiceInstance(id, new Date())]
                     );
 
-                    await this.redis.setAsync(registryKey, JSON.stringify(registryRow));
+                    await this.setRecordSet(registryRow);
                 }
             }
             else {
-                await this.redis.setAsync(registryKey, JSON.stringify({
+                await this.setRecordSet({
                     [name]: new RegistryRecord(
                         name,
                         url,
                         [new ServiceInstance(id, new Date())]
                     )
-                }));
+                });
             }
             this.server.emit(registerEvent(data.payload.id));
         } catch (e) {
@@ -82,6 +92,20 @@ class RegistryService {
     private async deregister(data: RegistryEvent<DeregisterEventData>) {
         try {
             const { name, instanceId } = data.payload;
+            const registryRow = await this.getRecordSet();
+            const targetService = registryRow[name];
+
+            if (targetService) {
+                if (targetService.instances.length > 1) {
+                    targetService.instances = targetService.instances
+                        .filter((x: ServiceInstance) => x.id !== instanceId)
+                }
+                else {
+                    delete registryRow[name];
+                }
+
+                await this.setRecordSet(registryRow);
+            }
         }
         catch (e) {
             console.log('Deregister Error: ', e)
