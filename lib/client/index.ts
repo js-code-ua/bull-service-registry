@@ -68,6 +68,8 @@ class RegistryClient extends RegistryBase {
     }
 
     public async deregister(): Promise<any> {
+        this.reconnect();
+
         const event = deregisterEvent(this.instanceId);
 
         this.registryQueue.add(
