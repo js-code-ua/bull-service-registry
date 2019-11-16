@@ -1,4 +1,4 @@
-export default function (socket: SocketIO.Socket, next: Function) {
+export default function(socket: SocketIO.Socket, next: Function) {
   const { instanceId, name } = socket.handshake.query;
   if (instanceId && name) {
     return next();

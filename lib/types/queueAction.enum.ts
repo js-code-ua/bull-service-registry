@@ -1,4 +1,4 @@
 export enum queueAction {
-    Register,
-    Deregister
-};
+  Register,
+  Deregister,
+}

@@ -1,2 +1,5 @@
 lib/
 tests/
+tsconfig.json
+tslint.json
+.prettierrc
