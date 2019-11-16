@@ -3,7 +3,7 @@ import * as ioRedis from 'socket.io-redis';
 import * as bullQueue from 'bull';
 
 import { redisOptions } from '../types/redisOptions.interface';
-import { queueName, registerEvent, registryKey } from '../types/constants';
+import { queueName, registerEvent, deregisterEvent, registryKey } from '../types/constants';
 import { queueAction } from '../types/queueAction.enum';
 import { RegistryEvent, RegisterEventData, DeregisterEventData } from '../types/registryEvent';
 
@@ -12,27 +12,15 @@ import connectionHandler from './events/connection';
 import { RedisWrapper } from '../redis';
 import { RegistryRecord, ServiceInstance } from '../types/registryRecord';
 
-class RegistryService {
-    private server: io.Server;
-    private registryQueue: bullQueue.Queue;
+export class RegistryBase {
     private redis: RedisWrapper;
+    private RegistryQueue: bullQueue.Queue;
 
     constructor(
-        port: number,
         options: redisOptions,
     ) {
         this.redis = new RedisWrapper(options);
-        this.server = io(port);
-        this.server.adapter(ioRedis({
-            host: options.host,
-            port: options.port,
-        }));
-        this.server.use(connectionMiddleware);
-
-        this.registryQueue = this.initQueue(options);
-        this.registryQueue.process(this.queueConsumer.bind(this));
-
-        this.server.on('connection', connectionHandler(this.registryQueue));
+        this.RegistryQueue = this.initQueue(options);
     }
 
     private initQueue(options?: redisOptions): bullQueue.Queue {
@@ -42,14 +30,37 @@ class RegistryService {
         return new bullQueue(queueName);
     }
 
+    get registryQueue() {
+        return this.RegistryQueue;
+    }
+
     public async getRecordSet() {
         const registryRow = JSON.parse((await this.redis.getAsync(registryKey)));
 
         return registryRow;
     }
 
-    private async setRecordSet(registryObject: object) {
+    public async setRecordSet(registryObject: object) {
         return (await this.redis.setAsync(registryKey, JSON.stringify(registryObject)));
+    }
+}
+
+class RegistryService extends RegistryBase {
+    private server: io.Server;
+
+    constructor(
+        port: number,
+        options: redisOptions,
+    ) {
+        super(options);
+        this.server = io(port);
+        this.server.adapter(ioRedis({
+            host: options.host,
+            port: options.port,
+        }));
+        this.server.use(connectionMiddleware);
+        this.registryQueue.process(this.queueConsumer.bind(this));
+        this.server.on('connection', connectionHandler(this.registryQueue));
     }
 
     private async register(data: RegistryEvent<RegisterEventData>): Promise<any> {
@@ -83,17 +94,20 @@ class RegistryService {
                     )
                 });
             }
-            this.server.emit(registerEvent(data.payload.id));
+            const event = registerEvent(data.payload.id);
+
+            this.server.emit(event);
+            console.log(`[Info]: ${event}`);
         } catch (e) {
             console.log('Register Error: ', e);
         }
     }
 
-    private async deregister(data: RegistryEvent<DeregisterEventData>) {
+    private deregister = async (data: RegistryEvent<DeregisterEventData>) => {
         try {
             const { name, instanceId } = data.payload;
             const registryRow = await this.getRecordSet();
-            const targetService = registryRow[name];
+            const targetService = registryRow ? registryRow[name] : null;
 
             if (targetService) {
                 if (targetService.instances.length > 1) {
@@ -103,8 +117,12 @@ class RegistryService {
                 else {
                     delete registryRow[name];
                 }
-
                 await this.setRecordSet(registryRow);
+
+                const event = deregisterEvent(instanceId);
+
+                this.server.emit(event);
+                console.log(`[Info]: ${event}`);
             }
         }
         catch (e) {
